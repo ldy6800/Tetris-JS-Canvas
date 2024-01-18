@@ -16,7 +16,15 @@
 						<p>Lines: <span id="lines">0</span></p>
 						<p>Level: <span id="level">0</span></p>
 					</div>
-					<div><button onclick="play()" class="play-button">Play</button></div>
+                    <div id="sound-div">
+                        <span class="sound-item" id="sound-speaker"></span>
+                        <span class="sound-item" id="sound-description"></span>
+                    </div>
+					<div>
+                        <button id="play-btn" onclick="play()" class="play-button">Play</button>
+                        <button id="pause-btn" onclick="pause()" class="play-button">Pause</button>
+                    </div>
+                    
 				</div>
 				<div class="right-menu">
 					<p>Next</p>

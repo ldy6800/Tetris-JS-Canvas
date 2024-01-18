@@ -5,40 +5,170 @@ const ctxNext = canvasNext.getContext('2d');
 const canvasSaved = document.getElementById('saved');
 const ctxSaved = canvasSaved.getContext('2d');
 
-moves = {
-	[KEY.LEFT]: p => ({ ...p, x: p.x - 1 }),
-	[KEY.RIGHT]: p => ({ ...p, x: p.x + 1 }),
-	[KEY.UP]: p => ({ ...p, y: p.y + 1 })
+let accountValues = {
+	score: 0,
+	level: 0,
+	lines: 0
+};
+
+function updateAccount(key, value) {
+	let element = document.getElementById(key);
+	if (element) {
+		element.textContent = value;
+	}
+}
+
+let account = new Proxy(accountValues, {
+	set: (target, key, value) => {
+		target[key] = value;
+		updateAccount(key, value);
+		return true;
+	}
+});
+
+let requestId = null;
+let time = null;
+
+const moves = {
+	[KEY.LEFT]: (p) => ({ ...p, x: p.x - 1 }),
+	[KEY.RIGHT]: (p) => ({ ...p, x: p.x + 1 }),
+	[KEY.DOWN]: (p) => ({ ...p, y: p.y + 1 }),
+	[KEY.SPACE]: (p) => ({ ...p, y: p.y + 1 }),
+	[KEY.UP]: (p) => board.rotate(p, ROTATION.RIGHT),
+	[KEY.SHIFT]: (p) => board.rotate(p, ROTATION.LEFT)
 };
 
 let board = new Board(ctx, ctxNext, ctxSaved);
-function play() {
-	board.reset();
-	console.table(board.grid);
-	let piece = new Piece(ctx);
-	piece.draw();
-
-	board.piece = piece;
+initNextSaved();
+function initNextSaved() {
+	ctxNext.canvas.width = 4 * MENU_BLOCK_SIZE;
+	ctxNext.canvas.height = 4 * MENU_BLOCK_SIZE;
+	ctxNext.scale(MENU_BLOCK_SIZE, MENU_BLOCK_SIZE);
+	ctxSaved.canvas.width = 4 * MENU_BLOCK_SIZE;
+	ctxSaved.canvas.height = 4 * MENU_BLOCK_SIZE;
+	ctxSaved.scale(MENU_BLOCK_SIZE, MENU_BLOCK_SIZE);
 }
 
-window.addEventListener('keydown', event => {
+function addEventListener() {
+	document.removeEventListener('keydown', handleKeyPress);
+	document.addEventListener('keydown', handleKeyPress);
+}
+
+function handleKeyPress(event) {
+	if (event.key === KEY.ESC) {
+		pause();
+	}
 	if (moves[event.key]) {
-		// 이벤트 버블링을 막는다.
 		event.preventDefault();
-		
-		// 조각의 새 상태를 얻는다.
-		if (moves[event.key]){
-			let p = moves[event.key](board.piece);
+		let p = moves[event.key](board.piece);
+		if (event.key === KEY.SPACE) {
+			if (document.querySelector('#pause-btn').style.display === 'block') {
+				//dropSound.play();
+			} else {
+				return;
+			}
 
-			if (board.valid(p)) {
-				// 이동이 가능한 상태라면 조각을 이동한다.
+			while (board.valid(p)) {
+				account.score += POINTS.HARD_DROP;
 				board.piece.move(p);
+				p = moves[KEY.DOWN](board.piece);
+			}
+			board.piece.hardDrop();
+			
+			if (!board.drop()) {
+				gameOver();
+				return;
+			}
+			// Clear board before drawing new state.
+			ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
-				// 그리기 전에 이전 좌표를 지운다.
-				ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-
-				board.piece.draw();
+			board.draw();
+			time.start = now;
+		} else if (board.valid(p)) {
+			if (document.querySelector('#pause-btn').style.display === 'block') {
+				//movesSound.play();
+			}
+			board.piece.move(p);
+			if (event.keyCode === KEY.DOWN &&
+				document.querySelector('#pause-btn').style.display === 'block') {
+				account.score += POINTS.SOFT_DROP;
 			}
 		}
 	}
-});
+}
+
+function resetGame() {
+	account.score = 0;
+	account.lines = 0;
+	account.level = 0;
+	board.reset();
+	time = { start: performance.now(), elapsed: 0, level: LEVEL[account.level] };
+}
+function play() {
+	addEventListener();
+	if (document.querySelector('#play-btn').style.display == '') {
+		resetGame();
+	}
+	if (requestId) {
+		cancelAnimationFrame(requestId);
+	}
+	animate();
+	document.querySelector('#play-btn').style.display = 'none';
+	document.querySelector('#pause-btn').style.display = 'block';
+	//backgroundSound.play();
+}
+
+function animate(now = 0) {
+	time.elapsed = now - time.start;
+	if (time.elapsed > time.level) {
+		time.start = now;
+		if (!board.drop()) {
+			gameOver();
+			return;
+		}
+	}
+
+	// Clear board before drawing new state.
+	ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+	board.draw();
+	requestId = requestAnimationFrame(animate);
+}
+
+function gameOver() {
+	cancelAnimationFrame(requestId);
+
+	ctx.fillStyle = 'black';
+	ctx.fillRect(1, 3, 8, 1.2);
+	ctx.font = '1px Arial';
+	ctx.fillStyle = 'red';
+	ctx.fillText('GAME OVER', 1.8, 4);
+
+	sound.pause();
+	//finishSound.play();
+	//checkHighScore(account.score);
+
+	document.querySelector('#pause-btn').style.display = 'none';
+	document.querySelector('#play-btn').style.display = '';
+}
+function pause() {
+	if (!requestId) {
+		document.querySelector('#play-btn').style.display = 'none';
+		document.querySelector('#pause-btn').style.display = 'block';
+		animate();
+		//backgroundSound.play();
+		return;
+	}
+
+	cancelAnimationFrame(requestId);
+	requestId = null;
+
+	ctx.fillStyle = 'black';
+	ctx.fillRect(1, 3, 8, 1.2);
+	ctx.font = '1px Arial';
+	ctx.fillStyle = 'yellow';
+	ctx.fillText('PAUSED', 3, 4);
+	document.querySelector('#play-btn').style.display = 'block';
+	document.querySelector('#pause-btn').style.display = 'none';
+	//sound.pause();
+}

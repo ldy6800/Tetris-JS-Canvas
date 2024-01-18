@@ -41,7 +41,8 @@ const KEY = {
     DOWN: "ArrowDown",
     UP: "ArrowUp",
     SHIFT: "Shift",
-    CTRL: "Control"
+    CTRL: "Control",
+    SPACE: " "
 };
 const POINTS = {
     SINGLE: 100,
